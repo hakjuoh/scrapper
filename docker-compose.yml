@@ -1,0 +1,12 @@
+version: "3.0"
+services:
+  db:
+    image: mysql:5.7
+    ports:
+      - 3306:3306
+    volumes:
+      - /Users/hno2/mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_USER: oagi
+      MYSQL_PASSWORD: oagi
+      MYSQL_ROOT_PASSWORD: oagi

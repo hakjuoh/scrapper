@@ -1,5 +1,6 @@
 package oh.hakju.scrapper;
 
+import oh.hakju.scrapper.dao.ContentDAO;
 import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -9,21 +10,33 @@ import org.jsoup.select.NodeVisitor;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 
 public class Bootstrapper {
 
+    private ContentDAO contentDao = new ContentDAO();
+
     public String getContentFrom(URL url) throws IOException {
         List<String> lines;
         HttpURLConnection connection = openConnection(url);
+        String redirectLocation = null;
         try {
             lines = IOUtils.readLines(connection.getInputStream(), "UTF-8");
+
+            if (connection.getResponseCode() == 301) {
+                redirectLocation = connection.getHeaderField("Location");
+            }
         } finally {
             connection.disconnect();
         }
 
-        return toString(lines);
+        if (redirectLocation != null) {
+            return getContentFrom(new URL(redirectLocation));
+        } else {
+            return toString(lines);
+        }
     }
 
     public HttpURLConnection openConnection(URL url) throws IOException {
@@ -38,12 +51,33 @@ public class Bootstrapper {
         return sb.toString();
     }
 
-    public static void main(String[] args) throws Exception {
+    private boolean isAvailable(URL url, String href) {
+        String host = url.getHost();
+        if (!href.startsWith("http://" + host) && !href.startsWith("https://" + host)) {
+            return false;
+        }
 
-        String baseUrl = "https://www.nytimes.com";
-        String content = new Bootstrapper().getContentFrom(new URL(baseUrl));
+        if (href.endsWith("xml") || href.endsWith("rss")) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public void scrap(URL url) throws IOException {
+        String content = getContentFrom(url);
+        if (content == null) {
+            return;
+        }
+
+        if (contentDao.exists(url)) {
+            return;
+        }
+
+        contentDao.insert(url, content);
+        System.out.println("Inserted content of " + url);
+
         Document document = Jsoup.parse(content);
-
         Map<String, List<String>> urlStringMap = new LinkedHashMap();
 
         Element body = document.body();
@@ -59,9 +93,10 @@ public class Bootstrapper {
                 }
 
                 String href = element.attr("href");
-                if (!href.startsWith(baseUrl)) {
+                if (!isAvailable(url, href)) {
                     return;
                 }
+
 
                 String text = element.text();
 
@@ -90,8 +125,23 @@ public class Bootstrapper {
         List<String> hrefs = new ArrayList(urlStringMap.keySet());
         Collections.sort(hrefs);
 
-        for (String href : hrefs) {
-            System.out.println(href + " --> " + urlStringMap.get(href));
-        }
+        hrefs.parallelStream().forEach(href -> {
+            URL contentUrl = null;
+            try {
+                contentUrl = new URL(href);
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            }
+            try {
+                scrap(contentUrl);
+            } catch (IOException | DAOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    public static void main(String[] args) throws Exception {
+        String baseUrl = "https://www.nytimes.com/";
+        new Bootstrapper().scrap(new URL(baseUrl));
     }
 }

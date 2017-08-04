@@ -1,6 +1,7 @@
 package oh.hakju.scrapper;
 
 import oh.hakju.scrapper.dao.ContentDAO;
+import org.apache.commons.io.HexDump;
 import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -12,6 +13,8 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class Bootstrapper {
@@ -57,7 +60,15 @@ public class Bootstrapper {
             return false;
         }
 
-        if (href.endsWith("xml") || href.endsWith("rss")) {
+        URL contentURL;
+        try {
+            contentURL = new URL(href);
+        } catch (MalformedURLException e) {
+            return false;
+        }
+
+        String path = contentURL.getPath();
+        if (!path.endsWith("html")) {
             return false;
         }
 
@@ -65,12 +76,16 @@ public class Bootstrapper {
     }
 
     public void scrap(URL url) throws IOException {
+        if (contentDao.exists(url)) {
+            return;
+        }
+
         String content = getContentFrom(url);
         if (content == null) {
             return;
         }
 
-        if (contentDao.exists(url)) {
+        if (contentDao.exists(content)) {
             return;
         }
 
@@ -130,12 +145,10 @@ public class Bootstrapper {
             try {
                 contentUrl = new URL(href);
             } catch (MalformedURLException e) {
-                e.printStackTrace();
             }
             try {
                 scrap(contentUrl);
             } catch (IOException | DAOException e) {
-                e.printStackTrace();
             }
         });
     }

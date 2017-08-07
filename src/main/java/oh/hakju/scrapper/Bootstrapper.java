@@ -75,27 +75,36 @@ public class Bootstrapper {
         return true;
     }
 
-    public void scrap(URL url) throws IOException {
-        if (contentDao.exists(url)) {
-            return;
-        }
-
+    public void scrap(URL url, boolean updated) throws IOException {
         String content = getContentFrom(url);
         if (content == null) {
             return;
         }
 
-        if (contentDao.exists(content)) {
-            return;
+        if (!updated) {
+            if (contentDao.exists(url)) {
+                return;
+            }
+            if (contentDao.exists(content)) {
+                return;
+            }
+
+            contentDao.insert(url, content);
+            System.out.println("Inserted content of " + url);
+        } else {
+            contentDao.update(url, content);
+            System.out.println("Updated content of " + url);
         }
 
-        contentDao.insert(url, content);
-        System.out.println("Inserted content of " + url);
 
         Document document = Jsoup.parse(content);
         Map<String, List<String>> urlStringMap = new LinkedHashMap();
 
         Element body = document.body();
+        if (body == null) {
+            return;
+        }
+
         body.traverse(new NodeVisitor() {
             @Override
             public void head(Node node, int depth) {
@@ -147,7 +156,7 @@ public class Bootstrapper {
             } catch (MalformedURLException e) {
             }
             try {
-                scrap(contentUrl);
+                scrap(contentUrl, false);
             } catch (IOException | DAOException e) {
             }
         });
@@ -155,6 +164,6 @@ public class Bootstrapper {
 
     public static void main(String[] args) throws Exception {
         String baseUrl = "https://www.nytimes.com/";
-        new Bootstrapper().scrap(new URL(baseUrl));
+        new Bootstrapper().scrap(new URL(baseUrl), true);
     }
 }

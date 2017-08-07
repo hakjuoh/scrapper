@@ -102,4 +102,28 @@ public class ContentDAO extends AbstractDAO {
             closeQuietly(ps, conn);
         }
     }
+
+    public void update(URL url, String content) throws DAOException {
+        Connection conn = openConnection();
+        setReadOnly(conn, false);
+
+        String statement = "UPDATE content SET content = ?, content_hash = ? WHERE URL = ?";
+        PreparedStatement ps = null;
+        try {
+            ps = conn.prepareStatement(statement);
+
+            int parameterIndex = 1;
+            ps.setString(parameterIndex++, content);
+            ps.setString(parameterIndex++, hash(content));
+            ps.setString(parameterIndex++, url.toString());
+            ps.execute();
+
+            conn.commit();
+        } catch (SQLException e) {
+            rollback(conn);
+            throw new DAOException("'" + statement + "' statement execution is failed.", e);
+        } finally {
+            closeQuietly(ps, conn);
+        }
+    }
 }

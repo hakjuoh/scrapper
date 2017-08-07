@@ -35,7 +35,7 @@ public class Bootstrapper {
 
     private BlockingQueue<Worker> queue = new LinkedBlockingQueue();
     private ExecutorService queueTaker = Executors.newSingleThreadExecutor();
-    private ExecutorService scrapperPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() + 1);
+    private ExecutorService scrapperPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2 + 1);
 
     public Bootstrapper() {
         queueTaker.execute(() -> {
@@ -143,7 +143,7 @@ public class Bootstrapper {
             if (contentDao.exists(url)) {
                 return null;
             } else {
-                Content.ContentType contentType = (article != null) ? Content.ContentType.Article : Content.ContentType.Unknown;
+                Content.ContentType contentType = Content.ContentType.Article;
                 content = contentDao.insert(contentType, url, contentString);
                 System.out.println("Inserted content of " + url);
 
@@ -201,8 +201,19 @@ public class Bootstrapper {
             }
         });
 
-        Worker worker = new Worker(content, urlStringMap);
-        queue.offer(worker);
+        List<String> hrefs = new ArrayList(urlStringMap.keySet());
+        Collections.sort(hrefs);
+
+        for (String href : hrefs) {
+            URL contentUrl = null;
+            try {
+                contentUrl = new URL(href);
+            } catch (MalformedURLException e) {
+            }
+
+            Worker worker = new Worker(content, contentUrl, urlStringMap.get(href));
+            queue.offer(worker);
+        }
 
         return content;
     }
@@ -247,53 +258,40 @@ public class Bootstrapper {
     public class Worker implements Runnable {
 
         private Content content;
-        private Map<String, List<String>> urlStringMap;
+        private URL href;
+        private List<String> linkTexts;
 
-        public Worker(Content content, Map<String, List<String>> urlStringMap) {
+        public Worker(Content content, URL href, List<String> linkTexts) {
             this.content = content;
-            this.urlStringMap = urlStringMap;
+            this.href = href;
+            this.linkTexts = linkTexts;
         }
 
         @Override
         public void run() {
-            if (urlStringMap == null || urlStringMap.isEmpty()) {
-                return;
+            Content target = null;
+            try {
+                target = scrap(href);
+            } catch (IOException | DAOException e) {
             }
 
-            List<String> hrefs = new ArrayList(urlStringMap.keySet());
-            Collections.sort(hrefs);
+            if (content != null && target != null) {
+                if (content.getContentType() == Content.ContentType.Article &&
+                    target.getContentType() == Content.ContentType.Article) {
 
-            hrefs.stream().forEach(href -> {
-                URL contentUrl = null;
-                try {
-                    contentUrl = new URL(href);
-                } catch (MalformedURLException e) {
-                }
+                    ContentRelation contentRelation = new ContentRelation();
+                    contentRelation.setSourceContentId(content.getContentId());
+                    contentRelation.setTargetContentId(target.getContentId());
 
-                Content target = null;
-                try {
-                    target = scrap(contentUrl);
-                } catch (IOException | DAOException e) {
-                }
-
-                if (content != null && target != null) {
-                    if (content.getContentType() == Content.ContentType.Article &&
-                        target.getContentType() == Content.ContentType.Article) {
-
-                        ContentRelation contentRelation = new ContentRelation();
-                        contentRelation.setSourceContentId(content.getContentId());
-                        contentRelation.setTargetContentId(target.getContentId());
-
-                        for (String text : urlStringMap.get(href)) {
-                            contentRelation.setLinkText(text);
-                            try {
-                                contentRelationDAO.insert(contentRelation);
-                            } catch (DAOException e) {
-                            }
+                    for (String text : linkTexts) {
+                        contentRelation.setLinkText(text);
+                        try {
+                            contentRelationDAO.insert(contentRelation);
+                        } catch (DAOException e) {
                         }
                     }
                 }
-            });
+            }
         }
     }
 

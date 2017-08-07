@@ -46,3 +46,15 @@ CREATE TABLE `content_relation` (
   CONSTRAINT `content_relation_ibfk_1` FOREIGN KEY (`source_content_id`) REFERENCES `content` (`content_id`),
   CONSTRAINT `content_relation_ibfk_2` FOREIGN KEY (`target_content_id`) REFERENCES `content` (`content_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Create syntax for TABLE 'sentence'
+CREATE TABLE `sentence` (
+  `sentence_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `article_id` bigint(20) unsigned NOT NULL,
+  `paragraph_seq` int(10) unsigned NOT NULL,
+  `sentence_seq` int(10) unsigned NOT NULL,
+  `text` text,
+  PRIMARY KEY (`sentence_id`),
+  KEY `article_id` (`article_id`),
+  CONSTRAINT `sentence_ibfk_1` FOREIGN KEY (`article_id`) REFERENCES `article` (`article_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

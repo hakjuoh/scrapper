@@ -1,7 +1,7 @@
 package oh.hakju.scrapper.dao;
 
 import oh.hakju.scrapper.DAOException;
-import oh.hakju.scrapper.entity.Article;
+import oh.hakju.scrapper.entity.Sentence;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,12 +10,12 @@ import java.sql.SQLException;
 
 import static java.sql.Statement.RETURN_GENERATED_KEYS;
 
-public class ArticleDAO extends AbstractDAO {
+public class SentenceDAO extends AbstractDAO {
 
-    public Long findMaxArticleId() throws DAOException {
+    public Long findMinArticleId() throws DAOException {
         Connection conn = openConnection();
 
-        String statement = "SELECT IFNULL(MAX(article_id), 0) FROM article";
+        String statement = "SELECT IFNULL(MIN(article_id), 0) FROM sentence";
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
@@ -33,41 +33,11 @@ public class ArticleDAO extends AbstractDAO {
         }
     }
 
-    public Article findById(Long articleId) throws DAOException {
-        Connection conn = openConnection();
-
-        String statement = "SELECT content_id, headline, text FROM article WHERE article_id = ?";
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-        try {
-            ps = conn.prepareStatement(statement);
-
-            int parameterIndex = 1;
-            ps.setLong(parameterIndex++, articleId);
-
-            rs = ps.executeQuery();
-            if (rs.next()) {
-                Article entity = new Article();
-                entity.setArticleId(articleId);
-                entity.setContentId(rs.getLong("content_id"));
-                entity.setHeadline(rs.getString("headline"));
-                entity.setText(rs.getString("text"));
-                return entity;
-            }
-
-            return null;
-        } catch (SQLException e) {
-            throw new DAOException("'" + statement + "' statement execution is failed.", e);
-        } finally {
-            closeQuietly(rs, ps, conn);
-        }
-    }
-
-    public Article insert(Article entity) throws DAOException {
+    public Sentence insert(Sentence entity) throws DAOException {
         Connection conn = openConnection();
         setReadOnly(conn, false);
 
-        String statement = "INSERT INTO article (content_id, headline, text) VALUES (?, ?, ?)";
+        String statement = "INSERT INTO sentence (article_id, paragraph_seq, sentence_seq, text) VALUES (?, ?, ?, ?)";
         PreparedStatement ps = null;
         ResultSet rs = null;
         Long entityId = 0L;
@@ -75,8 +45,9 @@ public class ArticleDAO extends AbstractDAO {
             ps = conn.prepareStatement(statement, RETURN_GENERATED_KEYS);
 
             int parameterIndex = 1;
-            ps.setLong(parameterIndex++, entity.getContentId());
-            ps.setString(parameterIndex++, entity.getHeadline());
+            ps.setLong(parameterIndex++, entity.getArticleId());
+            ps.setInt(parameterIndex++, entity.getParagraphSeq());
+            ps.setInt(parameterIndex++, entity.getSentenceSeq());
             ps.setString(parameterIndex++, entity.getText());
             ps.execute();
 
@@ -87,7 +58,7 @@ public class ArticleDAO extends AbstractDAO {
 
             conn.commit();
 
-            entity.setArticleId(entityId);
+            entity.setSentenceId(entityId);
             return entity;
         } catch (SQLException e) {
             rollback(conn);
@@ -96,4 +67,5 @@ public class ArticleDAO extends AbstractDAO {
             closeQuietly(rs, ps, conn);
         }
     }
+
 }

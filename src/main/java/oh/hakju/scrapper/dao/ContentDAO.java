@@ -83,7 +83,6 @@ public class ContentDAO extends AbstractDAO {
             }
 
         } catch (SQLException e) {
-            rollback(conn);
             throw new DAOException("'" + statement + "' statement execution is failed.", e);
         } finally {
             closeQuietly(rs, ps, conn);
@@ -110,7 +109,6 @@ public class ContentDAO extends AbstractDAO {
 
             return (cnt > 0) ? true : false;
         } catch (SQLException e) {
-            rollback(conn);
             throw new DAOException("'" + statement + "' statement execution is failed.", e);
         } finally {
             closeQuietly(rs, ps, conn);
@@ -137,7 +135,6 @@ public class ContentDAO extends AbstractDAO {
 
             return (cnt > 0) ? true : false;
         } catch (SQLException e) {
-            rollback(conn);
             throw new DAOException("'" + statement + "' statement execution is failed.", e);
         } finally {
             closeQuietly(rs, ps, conn);

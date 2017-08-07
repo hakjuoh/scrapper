@@ -1,7 +1,13 @@
 package oh.hakju.scrapper;
 
+import oh.hakju.scrapper.dao.ArticleDAO;
+import oh.hakju.scrapper.dao.ContentCategoryDAO;
 import oh.hakju.scrapper.dao.ContentDAO;
-import org.apache.commons.io.HexDump;
+import oh.hakju.scrapper.dao.ContentRelationDAO;
+import oh.hakju.scrapper.entity.Article;
+import oh.hakju.scrapper.entity.Content;
+import oh.hakju.scrapper.entity.ContentCategory;
+import oh.hakju.scrapper.entity.ContentRelation;
 import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -13,13 +19,40 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.regex.Pattern;
 
 public class Bootstrapper {
 
     private ContentDAO contentDao = new ContentDAO();
+    private ContentRelationDAO contentRelationDAO = new ContentRelationDAO();
+    private ContentCategoryDAO contentCategoryDAO = new ContentCategoryDAO();
+    private ArticleDAO articleDAO = new ArticleDAO();
+
+    private BlockingQueue<Worker> queue = new LinkedBlockingQueue();
+    private ExecutorService queueTaker = Executors.newSingleThreadExecutor();
+    private ExecutorService scrapperPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() + 1);
+
+    public Bootstrapper() {
+        queueTaker.execute(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                Worker worker = null;
+                try {
+                    worker = queue.take();
+                } catch (InterruptedException e) {
+                    break;
+                }
+
+                if (worker != null) {
+                    scrapperPool.execute(worker);
+                }
+            }
+        });
+    }
 
     public String getContentFrom(URL url) throws IOException {
         List<String> lines;
@@ -75,36 +108,58 @@ public class Bootstrapper {
         return true;
     }
 
-    public void scrap(URL url, boolean updated) throws IOException {
-        String content = getContentFrom(url);
-        if (content == null) {
-            return;
+    public Content scrap(URL url) throws IOException {
+        String contentString = getContentFrom(url);
+        if (contentString == null) {
+            return null;
         }
 
-        if (!updated) {
-            if (contentDao.exists(url)) {
-                return;
-            }
-            if (contentDao.exists(content)) {
-                return;
-            }
-
-            contentDao.insert(url, content);
-            System.out.println("Inserted content of " + url);
-        } else {
-            contentDao.update(url, content);
-            System.out.println("Updated content of " + url);
-        }
-
-
-        Document document = Jsoup.parse(content);
-        Map<String, List<String>> urlStringMap = new LinkedHashMap();
-
+        Document document = Jsoup.parse(contentString);
         Element body = document.body();
         if (body == null) {
-            return;
+            return null;
         }
 
+        Article article = null;
+        Element headlineElement = body.getElementById("headline");
+        if (headlineElement != null) {
+            article = new Article();
+            article.setHeadline(headlineElement.text());
+        }
+
+        List<Element> storyBodies = body.getElementsByClass("story-body");
+        if (article != null) {
+            StringBuilder sb = new StringBuilder();
+            for (Element storyBody : storyBodies) {
+                for (Element storyBodyText : storyBody.getElementsByClass("story-body-text")) {
+                    sb.append(storyBodyText.text()).append("\n");
+                }
+            }
+            article.setText(sb.toString());
+        }
+
+        Content content = null;
+        if (article != null) {
+            if (contentDao.exists(url)) {
+                return null;
+            } else {
+                Content.ContentType contentType = (article != null) ? Content.ContentType.Article : Content.ContentType.Unknown;
+                content = contentDao.insert(contentType, url, contentString);
+                System.out.println("Inserted content of " + url);
+
+                ContentCategory category = toContentCategory(url);
+                category.setContentId(content.getContentId());
+                contentCategoryDAO.insert(category);
+            }
+
+            article.setContentId(content.getContentId());
+            try {
+                articleDAO.insert(article);
+            } catch (DAOException e) {
+            }
+        }
+
+        Map<String, List<String>> urlStringMap = new LinkedHashMap();
         body.traverse(new NodeVisitor() {
             @Override
             public void head(Node node, int depth) {
@@ -121,7 +176,6 @@ public class Bootstrapper {
                     return;
                 }
 
-
                 String text = element.text();
 
                 List<String> texts;
@@ -134,6 +188,7 @@ public class Bootstrapper {
 
                 texts.add(text);
             }
+
             @Override
             public void tail(Node node, int depth) {
                 if (!(node instanceof Element)) {
@@ -146,24 +201,104 @@ public class Bootstrapper {
             }
         });
 
-        List<String> hrefs = new ArrayList(urlStringMap.keySet());
-        Collections.sort(hrefs);
+        Worker worker = new Worker(content, urlStringMap);
+        queue.offer(worker);
 
-        hrefs.parallelStream().forEach(href -> {
-            URL contentUrl = null;
-            try {
-                contentUrl = new URL(href);
-            } catch (MalformedURLException e) {
+        return content;
+    }
+
+    private ContentCategory toContentCategory(URL url) {
+        String urlPath = url.getPath();
+
+        StringTokenizer tokenizer = new StringTokenizer(urlPath, "/");
+        Pattern digitPattern = Pattern.compile("[\\d]+");
+
+        String topCategory = null;
+        String subCategory = null;
+
+        while (tokenizer.hasMoreTokens()) {
+            String token = tokenizer.nextToken();
+            if (token == null || token.length() == 0) {
+                continue;
             }
-            try {
-                scrap(contentUrl, false);
-            } catch (IOException | DAOException e) {
+
+            if (digitPattern.matcher(token).matches()) {
+                continue;
             }
-        });
+
+            if (token.endsWith(".html")) {
+                break;
+            }
+
+            if (topCategory == null) {
+                topCategory = token;
+            } else {
+                subCategory = token;
+            }
+        }
+
+        ContentCategory category = new ContentCategory();
+        category.setTopCategory(topCategory);
+        category.setSubCategory(subCategory);
+
+        return category;
+    }
+
+    public class Worker implements Runnable {
+
+        private Content content;
+        private Map<String, List<String>> urlStringMap;
+
+        public Worker(Content content, Map<String, List<String>> urlStringMap) {
+            this.content = content;
+            this.urlStringMap = urlStringMap;
+        }
+
+        @Override
+        public void run() {
+            if (urlStringMap == null || urlStringMap.isEmpty()) {
+                return;
+            }
+
+            List<String> hrefs = new ArrayList(urlStringMap.keySet());
+            Collections.sort(hrefs);
+
+            hrefs.stream().forEach(href -> {
+                URL contentUrl = null;
+                try {
+                    contentUrl = new URL(href);
+                } catch (MalformedURLException e) {
+                }
+
+                Content target = null;
+                try {
+                    target = scrap(contentUrl);
+                } catch (IOException | DAOException e) {
+                }
+
+                if (content != null && target != null) {
+                    if (content.getContentType() == Content.ContentType.Article &&
+                        target.getContentType() == Content.ContentType.Article) {
+
+                        ContentRelation contentRelation = new ContentRelation();
+                        contentRelation.setSourceContentId(content.getContentId());
+                        contentRelation.setTargetContentId(target.getContentId());
+
+                        for (String text : urlStringMap.get(href)) {
+                            contentRelation.setLinkText(text);
+                            try {
+                                contentRelationDAO.insert(contentRelation);
+                            } catch (DAOException e) {
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     public static void main(String[] args) throws Exception {
         String baseUrl = "https://www.nytimes.com/";
-        new Bootstrapper().scrap(new URL(baseUrl), true);
+        new Bootstrapper().scrap(new URL(baseUrl));
     }
 }

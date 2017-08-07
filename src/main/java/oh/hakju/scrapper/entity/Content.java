@@ -2,7 +2,14 @@ package oh.hakju.scrapper.entity;
 
 public class Content {
 
+    public enum ContentType {
+        Article,
+        Unknown
+    }
+
     private Long contentId;
+
+    private ContentType contentType;
 
     private String url;
 
@@ -14,6 +21,14 @@ public class Content {
 
     public void setContentId(Long contentId) {
         this.contentId = contentId;
+    }
+
+    public ContentType getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(ContentType contentType) {
+        this.contentType = contentType;
     }
 
     public String getUrl() {

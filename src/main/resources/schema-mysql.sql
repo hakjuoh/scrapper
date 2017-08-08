@@ -1,3 +1,14 @@
+-- Create syntax for TABLE 'article'
+CREATE TABLE `article` (
+  `article_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `content_id` bigint(20) unsigned NOT NULL,
+  `headline` varchar(255) DEFAULT '',
+  `text` longtext,
+  PRIMARY KEY (`article_id`),
+  UNIQUE KEY `content_id` (`content_id`),
+  CONSTRAINT `article_ibfk_1` FOREIGN KEY (`content_id`) REFERENCES `content` (`content_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Create syntax for TABLE 'content'
 CREATE TABLE `content` (
   `content_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -9,17 +20,6 @@ CREATE TABLE `content` (
   UNIQUE KEY `content_hash` (`content_hash`),
   UNIQUE KEY `url` (`url`),
   KEY `content_type` (`content_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Create syntax for TABLE 'article'
-CREATE TABLE `article` (
-  `article_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `content_id` bigint(20) unsigned NOT NULL,
-  `headline` varchar(255) DEFAULT '',
-  `text` longtext,
-  PRIMARY KEY (`article_id`),
-  UNIQUE KEY `content_id` (`content_id`),
-  CONSTRAINT `article_ibfk_1` FOREIGN KEY (`content_id`) REFERENCES `content` (`content_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Create syntax for TABLE 'content_category'
@@ -45,6 +45,17 @@ CREATE TABLE `content_relation` (
   KEY `target_content_id` (`target_content_id`),
   CONSTRAINT `content_relation_ibfk_1` FOREIGN KEY (`source_content_id`) REFERENCES `content` (`content_id`),
   CONSTRAINT `content_relation_ibfk_2` FOREIGN KEY (`target_content_id`) REFERENCES `content` (`content_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Create syntax for TABLE 'paragraph'
+CREATE TABLE `paragraph` (
+  `paragraph_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `article_id` bigint(20) unsigned NOT NULL,
+  `paragraph_seq` int(10) unsigned NOT NULL,
+  `text` text NOT NULL,
+  PRIMARY KEY (`paragraph_id`),
+  UNIQUE KEY `article_id` (`article_id`,`paragraph_seq`),
+  CONSTRAINT `paragraph_ibfk_1` FOREIGN KEY (`article_id`) REFERENCES `article` (`article_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Create syntax for TABLE 'sentence'

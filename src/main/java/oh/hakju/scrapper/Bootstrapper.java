@@ -8,7 +8,6 @@ import oh.hakju.scrapper.entity.Article;
 import oh.hakju.scrapper.entity.Content;
 import oh.hakju.scrapper.entity.ContentCategory;
 import oh.hakju.scrapper.entity.ContentRelation;
-import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -16,7 +15,6 @@ import org.jsoup.nodes.Node;
 import org.jsoup.select.NodeVisitor;
 
 import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -25,6 +23,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.regex.Pattern;
+
+import static oh.hakju.scrapper.Helper.getContentFrom;
 
 public class Bootstrapper {
 
@@ -52,39 +52,6 @@ public class Bootstrapper {
                 }
             }
         });
-    }
-
-    public String getContentFrom(URL url) throws IOException {
-        List<String> lines;
-        HttpURLConnection connection = openConnection(url);
-        String redirectLocation = null;
-        try {
-            lines = IOUtils.readLines(connection.getInputStream(), "UTF-8");
-
-            if (connection.getResponseCode() == 301) {
-                redirectLocation = connection.getHeaderField("Location");
-            }
-        } finally {
-            connection.disconnect();
-        }
-
-        if (redirectLocation != null) {
-            return getContentFrom(new URL(redirectLocation));
-        } else {
-            return toString(lines);
-        }
-    }
-
-    public HttpURLConnection openConnection(URL url) throws IOException {
-        return (HttpURLConnection) url.openConnection();
-    }
-
-    private String toString(Collection<String> lines) {
-        StringBuilder sb = new StringBuilder();
-        for (String line : lines) {
-            sb.append(line);
-        }
-        return sb.toString();
     }
 
     private boolean isAvailable(URL url, String href) {

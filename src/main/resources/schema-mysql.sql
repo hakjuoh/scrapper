@@ -58,6 +58,24 @@ CREATE TABLE `paragraph` (
   CONSTRAINT `paragraph_ibfk_1` FOREIGN KEY (`article_id`) REFERENCES `article` (`article_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Create syntax for TABLE 'vocabulary'
+CREATE TABLE `vocabulary` (
+  `vocabulary_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `word` varchar(100) NOT NULL DEFAULT '',
+  `pos` varchar(100) NOT NULL DEFAULT '',
+  PRIMARY KEY (`vocabulary_id`),
+  UNIQUE KEY `vocabulary_uk1` (`word`,`pos`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Create syntax for TABLE 'vocabulary_relation'
+CREATE TABLE `vocabulary_relation` (
+  `vocabulary_relation_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `vocabulary_id` bigint(20) unsigned NOT NULL,
+  `paragraph_id` bigint(20) unsigned NOT NULL,
+  PRIMARY KEY (`vocabulary_relation_id`),
+  UNIQUE KEY `vocabulary_id` (`vocabulary_id`,`paragraph_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Create syntax for TABLE 'sentence'
 CREATE TABLE `sentence` (
   `sentence_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
